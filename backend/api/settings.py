@@ -34,7 +34,9 @@ ALLOWED_HOSTS = []
 
 FRONTEND_URL = os.getenv('FRONTEND_URL')
 FRONTEND_EMAIL_VERIFICATION_URL = f"{os.getenv('FRONTEND_URL')}/verify-email?token="
+FRONTEND_EMAIL_RESET_PASSWORD_URL =  f"{os.getenv('FRONTEND_URL')}/forgot-password?token="
 
+EMAIL_TOKEN_CONFIRMATION_EXPIRY = timedelta(minutes=10)
 # Application definition
 
 INSTALLED_APPS = [
@@ -67,6 +69,7 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = True  # Replace with specific allowed domains in production
 CORS_ALLOW_CREDENTIALS = True
 
+MAX_USER_PASSWORD_HISTORY_LENGTH = os.getenv('MAX_USER_PASSWORD_HISTORY_LENGTH')
 # Authentication Settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

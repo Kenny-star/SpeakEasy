@@ -11,15 +11,9 @@ from django.utils.crypto import get_random_string
 from django.utils import timezone
 from datetime import timedelta
 from ._utils.helper import authenticate_login
+from django.db import IntegrityError
 # from models import *
 import jwt
-
-# User Serializer for Signup and Login
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ('id', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'is_superuser', 'date_joined')
-        read_only_fields = ('is_active', 'is_staff', 'is_superuser', 'date_joined')
 
 class SignupSerializer(serializers.ModelSerializer):
     email = serializers.EmailField()
@@ -50,11 +44,12 @@ class SignupSerializer(serializers.ModelSerializer):
         validated_data.pop('password_confirm')  # Remove password_confirm before saving
         user = User.objects.create_user(**validated_data)
 
+        duration = settings.EMAIL_TOKEN_CONFIRMATION_EXPIRY
         # Generate the verification token (JWT)
-        verification_token = generate_verification_token(user)
+        verification_token = generate_verification_token(user, duration)
 
         # Send the verification email with the link
-        send_verification_email(user.email, verification_token)
+        send_verification_email(user.email, verification_token, "login", str(duration).split(',')[0])
 
         # Return the user object after creation
         return user
@@ -130,64 +125,88 @@ class RefreshTokenSerializer(serializers.Serializer):
             'access_token': access_token,
         }
       
-
-class RefreshTokenModelSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = RefreshToken
-        fields = ['user', 'token', 'created_at', 'expired_at']
-
-    def create(self, validated_data):
-        refresh_token = validated_data.get('token')
-        expired_at = validated_data.get('expired_at')
-
-        # Ensure the refresh token is valid before saving it
-        refresh_token_instance = RefreshToken(
-            user=validated_data['user'],
-            token=refresh_token,
-            expired_at=expired_at,
-        )
-        refresh_token_instance.save()
-
-        return refresh_token_instance
-    
 # Serializer to generate and verify password reset tokens
-class PasswordResetRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-
-    def validate_email(self, value):
-        user = User.objects.filter(email=value).first()
-        if not user:
-            raise serializers.ValidationError("No user found with this email address.")
-        return value
 
 class PasswordResetTokenSerializer(serializers.ModelSerializer):
+
+    email = serializers.EmailField()
+
     class Meta:
         model = PasswordResetToken
-        fields = ('token', 'user', 'created_at', 'expires_at')
-        read_only_fields = ('user', 'created_at', 'expires_at')
+        fields = ('user', 'email', 'created_at', 'expired_at')
+        read_only_fields = ('user', 'created_at', 'expired_at')
 
+    def validate(self, data):
+        user = User.objects.filter(email=data['email']).first()
+        if not user:
+            raise serializers.ValidationError("No user found with this email address.")
+        
+
+        data['user'] = user
+        return data
+    
     def create(self, validated_data):
-        # Generate a random reset token
-        reset_token = get_random_string(length=32)
+        msg = ""
+        try:
+            # Retrieve user from validated data
+            user = validated_data.get('user')
+            if not user:
+                raise serializers.ValidationError("User not found in validated data.")
+            
+            # Fetch both valid and expired tokens in one query
+            tokens = PasswordResetToken.objects.filter(user=user)
 
-        # Set expiration time (e.g., 1 hour from now)
-        expiration_time = timezone.now() + timedelta(hours=1)
+            # Split tokens into valid and expired
+            valid_tokens = [token for token in tokens if token.expired_at > timezone.now()]
+            expired_tokens = [token for token in tokens if token.expired_at <= timezone.now()]
 
-        # Create and store the reset token for the user
-        password_reset_token = PasswordResetToken.objects.create(
-            user=validated_data['user'],
-            token=reset_token,
-            expires_at=expiration_time
-        )
+            # If there are expired tokens, delete them
+            PasswordResetToken.objects.filter(id__in=[token.id for token in expired_tokens]).delete()
 
-        return password_reset_token
+            # If there is a valid token, assign it
+            existing_token = valid_tokens[0] if valid_tokens else None
 
+            if existing_token:
+                # If there's an existing valid token, do not generate a new one
+                msg += "Non-expired password reset token is already sent to your email. (<10min)"
+                return existing_token, msg
+                
+        
+            token, duration = None, settings.EMAIL_TOKEN_CONFIRMATION_EXPIRY
+            expiry_time = timezone.now() + duration  # Token expires in 10 minutes
+                
+            for _ in range(100):
+                try:
+                    token = get_random_string(32)  # Generate a 32-character random string for token
+                    # Create and store the reset token for the user
+                    pwd, created = PasswordResetToken.objects.get_or_create(
+                        user=user,
+                        token=token,
+                        expired_at=expiry_time
+                    )
+                    if created:
+                        send_verification_email(user.email, token, "reset-password", str(duration).split(',')[0])
+                        msg += "Password reset link has been sent to your email."
+                        return pwd, msg
+                    
+                except IntegrityError:
+                    # If a collision occurs (duplicate user-email/token), retry with a new token
+                    continue
+                        
+        except serializers.ValidationError("Failed to create a unique token.") as e:
+            # Handle the validation error (e.g., log it, raise it again, or return a response)
+            raise e  # or handle the exception as needed
+        
 # Serializer to validate password reset
-class PasswordResetConfirmSerializer(serializers.Serializer):
+class PasswordResetConfirmSerializer(serializers.ModelSerializer):
     token = serializers.CharField()
     new_password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
 
+    class Meta:
+        model: PasswordResetToken
+        fields = '__all__'
+        
     def validate(self, data):
         # Check if the token exists and is valid
         try:

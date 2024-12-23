@@ -1,7 +1,7 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.db import models
 from django.utils import timezone
-
+from django.core.exceptions import ObjectDoesNotExist
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -43,6 +43,24 @@ class PasswordResetToken(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expired_at = models.DateTimeField()
 
+    @classmethod
+    def get_user_by_token(cls, token):
+        try:
+            # Retrieve the PasswordResetToken object by token
+            reset_token = cls.objects.get(token=token)
+
+            # Check if the token has expired
+            if reset_token.is_expired():
+                raise ValueError("Token has expired")
+
+            # Return the associated user
+            return reset_token.user
+        
+        except ObjectDoesNotExist:
+            raise ValueError("Invalid token")
+        except ValueError as e:
+            raise ValueError(str(e))
+        
     def is_expired(self):
         return timezone.now() > self.expired_at
 
