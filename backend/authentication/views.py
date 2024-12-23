@@ -14,6 +14,7 @@ from rest_framework.permissions import AllowAny
 from datetime import timedelta
 from django.utils import timezone
 import jwt
+from django.db import IntegrityError
 
 access_token_lifetime = settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME']
 refresh_token_lifetime = settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']
@@ -48,17 +49,36 @@ class EmailVerificationView(APIView):
         # Return validation errors if the token is invalid
         return JsonResponse(serializer.errors, status=400)
 
+class ForgotPasswordView(APIView):
+    def post(self, request):
+        token_serializer= PasswordResetTokenSerializer(data=request.data)
+        if token_serializer.is_valid():
+            # Send the reset link via email (pseudo-code for email sending)
+            token_serialized, msg = token_serializer.save()  # Save the token and get the object
+
+            return Response(
+                {"message": msg},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(token_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
 
 class PasswordResetView(APIView):
     def post(self, request):
-        email = request.data.get('email')
+
+        token = request.GET.get('token')
         new_password = request.data.get('new_password')
 
         # Check if user exists
-        user = User.objects.filter(email=email).first()
-        if not user:
-            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-
+        try:
+            # Get user by token
+            user = PasswordResetToken.get_user_by_token(token)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
         # Check password history to prevent reusing old passwords
         password_history = PasswordHistory.objects.filter(user=user)
 
