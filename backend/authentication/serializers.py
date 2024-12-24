@@ -1,4 +1,4 @@
-from ._utils.email import send_verification_email
+from ._utils.email import *
 from ._utils._tokens import generate_verification_token
 from api import settings
 from rest_framework import serializers
@@ -12,8 +12,8 @@ from django.utils import timezone
 from datetime import timedelta
 from ._utils.helper import authenticate_login
 from django.db import IntegrityError
-# from models import *
 import jwt
+from django.db import transaction
 
 class SignupSerializer(serializers.ModelSerializer):
     email = serializers.EmailField()
@@ -40,16 +40,23 @@ class SignupSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        # Create the user
-        validated_data.pop('password_confirm')  # Remove password_confirm before saving
-        user = User.objects.create_user(**validated_data)
-
         duration = settings.EMAIL_TOKEN_CONFIRMATION_EXPIRY
+
+        validated_data.pop('password_confirm')  
+        with transaction.atomic():
+            user, created = User.objects.get_or_create(
+                email=validated_data['email'],  # Match by email
+                defaults=validated_data
+            )
+        
+        if not created:
+            pass
+        
         # Generate the verification token (JWT)
         verification_token = generate_verification_token(user, duration)
 
         # Send the verification email with the link
-        send_verification_email(user.email, verification_token, "login", str(duration).split(',')[0])
+        send_verification_email_async(user.email, verification_token, "login", duration)
 
         # Return the user object after creation
         return user
@@ -185,7 +192,7 @@ class PasswordResetTokenSerializer(serializers.ModelSerializer):
                         expired_at=expiry_time
                     )
                     if created:
-                        send_verification_email(user.email, token, "reset-password", str(duration).split(',')[0])
+                        send_verification_email_async(user.email, token, "reset-password", duration)
                         msg += "Password reset link has been sent to your email."
                         return pwd, msg
                     
