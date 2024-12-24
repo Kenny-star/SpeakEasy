@@ -23,10 +23,10 @@ class SignupView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = SignupSerializer(data=request.data)
 
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             serializer.save()
 
-            return Response({'message': 'New user has been created!'}, status=status.HTTP_200_OK)
+            return Response({'message': 'Verification email sent!'}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -41,7 +41,7 @@ class EmailVerificationView(APIView):
 
         # Pass the token to the serializer for validation
         serializer = EmailVerificationSerializer(data={"token": token})
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             # Activate the user and save
             serializer.save()
             return JsonResponse({"message": "Email verified successfully."}, status=200)
@@ -52,7 +52,7 @@ class EmailVerificationView(APIView):
 class ForgotPasswordView(APIView):
     def post(self, request):
         token_serializer= PasswordResetTokenSerializer(data=request.data)
-        if token_serializer.is_valid():
+        if token_serializer.is_valid(raise_exception=True):
             # Send the reset link via email (pseudo-code for email sending)
             token_serialized, msg = token_serializer.save()  # Save the token and get the object
 
@@ -102,7 +102,7 @@ class LoginView(APIView):
     def post(self, request):
         # Use the LoginSerializer to validate input and authenticate user
         serializer = LoginSerializer(data=request.data)
-        if not serializer.is_valid():
+        if not serializer.is_valid(raise_exception=True):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         # Extract validated data
@@ -130,7 +130,7 @@ class RefreshTokenView(APIView):
             # Pass the refresh token to the serializer
             serializer = RefreshTokenSerializer(data={"refresh_token": refresh_token})
 
-            if serializer.is_valid():
+            if serializer.is_valid(raise_exception=True):
                 # Get new access token
                 new_access_token = serializer.save()
                 # Create response
