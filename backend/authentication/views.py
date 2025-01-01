@@ -13,7 +13,6 @@ from django.http import JsonResponse
 from rest_framework.permissions import AllowAny
 from datetime import timedelta
 from django.utils import timezone
-import jwt
 from django.db import IntegrityError
 
 access_token_lifetime = settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME']

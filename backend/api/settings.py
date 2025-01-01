@@ -92,6 +92,9 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+PASSWORD_RESET_KEY = os.getenv("PASSWORD_RESET_KEY")
+PASSWORD_RESET_RATE = os.getenv("PASSWORD_RESET_RATE")
+
 # Cookie settings
 CSRF_COOKIE_SECURE = True  # Set to True for production
 SESSION_COOKIE_SECURE = True  # Set to True for production
