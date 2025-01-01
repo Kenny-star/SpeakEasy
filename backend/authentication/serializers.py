@@ -1,20 +1,19 @@
 from ._utils.email import *
 from ._utils._tokens import generate_verification_token
-from api import settings
-from rest_framework import serializers
+from ._utils.helper import authenticate_login
+from django.conf import settings
 from django.utils.timezone import now
-from authentication.models import User, PasswordResetToken, RefreshToken as rt
-from django.contrib.auth import password_validation
-from django.core.exceptions import ValidationError
-from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils.crypto import get_random_string
 from django.utils import timezone
+from django.contrib.auth import password_validation
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework import serializers
 from datetime import timedelta
-from ._utils.helper import authenticate_login
-from django.db import IntegrityError
+from authentication.models import User, PasswordResetToken, RefreshToken as rt
+from django_ratelimit.decorators import ratelimit
 import jwt
-from django.db import transaction
-
 class SignupSerializer(serializers.ModelSerializer):
     email = serializers.EmailField()
     first_name = serializers.CharField(max_length=50)
@@ -133,7 +132,7 @@ class RefreshTokenSerializer(serializers.Serializer):
         }
       
 # Serializer to generate and verify password reset tokens
-
+@ratelimit(key=settings.PASSWORD_RESET_KEY, rate=settings.PASSWORD_RESET_RATE, block=True)
 class PasswordResetTokenSerializer(serializers.ModelSerializer):
 
     email = serializers.EmailField()
