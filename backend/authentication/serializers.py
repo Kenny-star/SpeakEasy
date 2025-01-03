@@ -14,6 +14,15 @@ from datetime import timedelta
 from authentication.models import User, PasswordResetToken, RefreshToken as rt
 from django_ratelimit.decorators import ratelimit
 import jwt
+
+duration = settings.EMAIL_TOKEN_CONFIRMATION_EXPIRY
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'is_superuser', 'date_joined')
+        # read_only_fields = ('is_active', 'is_staff', 'is_superuser', 'date_joined')
+
 class SignupSerializer(serializers.ModelSerializer):
     email = serializers.EmailField()
     first_name = serializers.CharField(max_length=50)
@@ -39,8 +48,7 @@ class SignupSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        duration = settings.EMAIL_TOKEN_CONFIRMATION_EXPIRY
-
+        
         validated_data.pop('password_confirm')  
         with transaction.atomic():
             user, created = User.objects.get_or_create(
@@ -73,14 +81,16 @@ class LoginSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError("Invalid credentials")
 
-        if not user.is_active:
-            raise serializers.ValidationError("Account not verified. Please verify your email.")
-
         # Generate tokens
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
 
+        if not user.is_active:
+            verification_token = generate_verification_token(user, duration)
+            send_verification_email_async(user.email, verification_token, "login", duration)
+            raise serializers.ValidationError("Account not verified. Please verify your email.")
+        
         # Try to get an existing refresh token for the user
         refresh_token_entry, created = rt.objects.get_or_create(
             user=user,
@@ -99,7 +109,6 @@ class LoginSerializer(serializers.Serializer):
 
         
         return {
-            'user': user,
             'access_token': access_token,
             'refresh_token': refresh_token,
         }
@@ -257,7 +266,7 @@ class EmailVerificationSerializer(serializers.Serializer):
     def validate_token(self, token):
         try:
             # Decode the token to extract payload
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.SIMPLE_JWT['ALGORITHM']])
 
             # Ensure the required fields exist in the payload
             user_id = payload.get('user_id')

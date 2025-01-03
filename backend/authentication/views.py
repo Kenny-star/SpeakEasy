@@ -10,7 +10,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.conf import settings
 from django.urls import reverse
 from django.http import JsonResponse
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from datetime import timedelta
 from django.utils import timezone
 from django.db import IntegrityError
@@ -19,7 +19,9 @@ access_token_lifetime = settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME']
 refresh_token_lifetime = settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']
 
 class SignupView(APIView):
+    permission_classes = [AllowAny]
     def post(self, request, *args, **kwargs):
+        
         serializer = SignupSerializer(data=request.data)
 
         if serializer.is_valid(raise_exception=True):
@@ -31,7 +33,7 @@ class SignupView(APIView):
 
 # http://127.0.0.1:8000/email-verification/?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJlbWFpbCI6Imtlbm55Lmx1b2xpQGhvdG1haWwuY2EiLCJleHAiOjE3MzQ2MzE0MzB9.BvxbK_Nci2dncYOAwe_Mkiyvac8sXe0aYYL3wU4OuhE
 class EmailVerificationView(APIView):
-
+    permission_classes = [AllowAny]
     def get(self, request):
         token = request.GET.get('token')
 
@@ -49,6 +51,7 @@ class EmailVerificationView(APIView):
         return JsonResponse(serializer.errors, status=400)
 
 class ForgotPasswordView(APIView):
+    permission_classes = [AllowAny]
     def post(self, request):
         token_serializer= PasswordResetTokenSerializer(data=request.data)
         if token_serializer.is_valid(raise_exception=True):
@@ -66,6 +69,7 @@ class ForgotPasswordView(APIView):
 
 
 class PasswordResetView(APIView):
+    permission_classes = [AllowAny]
     def post(self, request):
 
         token = request.GET.get('token')
@@ -96,6 +100,7 @@ class PasswordResetView(APIView):
 
 
 class LoginView(APIView):
+    authentication_classes = [] 
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -120,6 +125,7 @@ class LoginView(APIView):
     
 
 class RefreshTokenView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request):
         refresh_token = request.COOKIES.get('refresh_token')
         if not refresh_token:
@@ -133,7 +139,7 @@ class RefreshTokenView(APIView):
                 # Get new access token
                 new_access_token = serializer.save()
                 # Create response
-                response = JsonResponse({"access_token": new_access_token['access_token']})
+                response = JsonResponse({"access_token": new_access_token['access_token']}, status=status.HTTP_200_OK)
 
                 # Set new access token in cookies
                 create_cookie(response, 'access_token', new_access_token, access_token_lifetime.total_seconds())
@@ -142,3 +148,37 @@ class RefreshTokenView(APIView):
         except Exception as e:
 
             return JsonResponse({"error": "Invalid refresh token"}, status=400)
+
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        email = request.user.email
+        
+        try:
+            user = User.objects.get(email=email)
+            serializer = UserSerializer(user)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        except User.DoesNotExist:
+            # Handle the case where the user doesn't exist
+            return JsonResponse({"error": "User not found"}, status=404)
+    
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        try:
+            refresh_token = request.COOKIES.get('refresh_token')
+            user_session = rt.objects.get(token=refresh_token)
+            user_session.delete()
+
+            response = JsonResponse({'message': 'Logout successful'})
+            response.set_cookie('access_token', '', max_age=0)
+            response.set_cookie('refresh_token', '', max_age=0)
+            
+            return response
+        
+        except rt.DoesNotExist:
+            return JsonResponse({"error": "Refresh Token not found"}, status=404)

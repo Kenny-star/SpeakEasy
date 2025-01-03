@@ -1,9 +1,57 @@
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+from django.contrib.auth.models import AbstractBaseUser
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.auth import get_user_model
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.authentication import BaseAuthentication
+import jwt
+from datetime import datetime, timezone as tz
+import redis
 
+class AccessTokenAuthentication(BaseAuthentication):
+    def authenticate(self, request):
+        # Get the access token from the cookies
+        access_token_str = request.COOKIES.get('access_token', None)
 
+        if not access_token_str:
+            raise AuthenticationFailed("No access token found. Please login.")
+        
+        try:
+            # Decode the JWT access token to get the payload
+            payload = jwt.decode(access_token_str, settings.SECRET_KEY, algorithms=[settings.SIMPLE_JWT['ALGORITHM']])
+
+            user_id = payload.get('user_id')
+            if not user_id:
+                raise AuthenticationFailed('User ID not found in token')
+            # Check for expiration in the payload
+            exp_timestamp = payload.get('exp') 
+            dt_object = datetime.fromtimestamp(exp_timestamp, tz=tz.utc)
+            if dt_object < timezone.now():
+                raise AuthenticationFailed('Access token has expired')
+            
+            # Check Redis cache for user
+            redis_key = f'user_{user_id}'
+            user = cache.get(redis_key)
+
+            if not user:
+                user = get_user_model().objects.filter(id=user_id).first()
+                if not user:
+                    raise AuthenticationFailed('User not found')
+                # Cache the user object for subsequent requests
+                cache.set(redis_key, user, timeout=1800)  # Cache for 30 min
+            
+            return (user, None)
+        
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Access token has expired')
+        except jwt.DecodeError:
+            raise AuthenticationFailed('Invalid access token')
+        except get_user_model().DoesNotExist:
+            raise AuthenticationFailed('User not found')
+        
 class User(AbstractBaseUser):
     email = models.EmailField(unique=True, db_index=True)
     first_name = models.CharField(max_length=50)
