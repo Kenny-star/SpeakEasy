@@ -85,33 +85,33 @@ class LoginSerializer(serializers.Serializer):
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
-
         if not user.is_active:
             verification_token = generate_verification_token(user, duration)
             send_verification_email_async(user.email, verification_token, "login", duration)
-            raise serializers.ValidationError("Account not verified. Please verify your email.")
+            raise serializers.ValidationError("Please verify your email.")
         
-        # Try to get an existing refresh token for the user
-        refresh_token_entry, created = rt.objects.get_or_create(
-            user=user,
-            defaults={
-                'token': refresh_token,
-                'created_at': now(),
-                'expired_at': now() + settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']  # Set your desired expiration time
-            }
-        )
-        if not created or refresh_token_entry.is_expired():
-            # Update the existing token if it already exists
-            refresh_token_entry.token = refresh_token
-            refresh_token_entry.created_at = now()
-            refresh_token_entry.expired_at = now() + settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']
-            refresh_token_entry.save()
+        if user.is_active:
+            # Try to get an existing refresh token for the user
+            refresh_token_entry, created = rt.objects.get_or_create(
+                user=user,
+                defaults={
+                    'token': refresh_token,
+                    'created_at': now(),
+                    'expired_at': now() + settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']  # Set your desired expiration time
+                }
+            )
+            if not created or refresh_token_entry.is_expired():
+                # Update the existing token if it already exists
+                refresh_token_entry.token = refresh_token
+                refresh_token_entry.created_at = now()
+                refresh_token_entry.expired_at = now() + settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']
+                refresh_token_entry.save()
 
-        
-        return {
-            'access_token': access_token,
-            'refresh_token': refresh_token,
-        }
+            
+            return {
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+            }
 class RefreshTokenSerializer(serializers.Serializer):
     refresh_token = serializers.CharField()
 
@@ -265,9 +265,9 @@ class EmailVerificationSerializer(serializers.Serializer):
 
     def validate_token(self, token):
         try:
+            print(token)
             # Decode the token to extract payload
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.SIMPLE_JWT['ALGORITHM']])
-
             # Ensure the required fields exist in the payload
             user_id = payload.get('user_id')
             email = payload.get('email')

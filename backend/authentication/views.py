@@ -33,6 +33,7 @@ class SignupView(APIView):
 
 # http://127.0.0.1:8000/email-verification/?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJlbWFpbCI6Imtlbm55Lmx1b2xpQGhvdG1haWwuY2EiLCJleHAiOjE3MzQ2MzE0MzB9.BvxbK_Nci2dncYOAwe_Mkiyvac8sXe0aYYL3wU4OuhE
 class EmailVerificationView(APIView):
+    authentication_classes = [] 
     permission_classes = [AllowAny]
     def get(self, request):
         token = request.GET.get('token')
@@ -171,8 +172,9 @@ class LogoutView(APIView):
     def delete(self, request):
         try:
             refresh_token = request.COOKIES.get('refresh_token')
-            user_session = rt.objects.get(token=refresh_token)
-            user_session.delete()
+            updated = User.objects.filter(
+                id=rt.objects.filter(token=refresh_token).values('user_id')
+            ).update(is_active=False)
 
             response = JsonResponse({'message': 'Logout successful'})
             response.set_cookie('access_token', '', max_age=0)
