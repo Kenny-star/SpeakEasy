@@ -72,13 +72,29 @@ CORS_ALLOW_CREDENTIALS = True
 MAX_USER_PASSWORD_HISTORY_LENGTH = os.getenv('MAX_USER_PASSWORD_HISTORY_LENGTH')
 # Authentication Settings
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
+    'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
+        'authentication.models.AccessTokenAuthentication',  # Your custom auth class
+        'rest_framework.authentication.SessionAuthentication',  # Optional, can keep if needed
+        'rest_framework.authentication.TokenAuthentication',  # Optional, can keep if needed
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',  # Make sure the user is authenticated
+    ],
 }
 
 TIME_ZONE = 'UTC'  # Use UTC as the backend default timezone
 USE_TZ = True  # Activate timezone support in Django
+
+# CACHES = {
+#     'default': {
+#         'BACKEND': 'django_redis.cache.RedisCache',
+#         'LOCATION': 'redis://127.0.0.1:6379/1',  # Redis server location
+#         'OPTIONS': {
+#             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+#         },
+#     }
+# }
 
 # JWT settings
 SIMPLE_JWT = {
