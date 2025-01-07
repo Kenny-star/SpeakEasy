@@ -98,8 +98,8 @@ USE_TZ = True  # Activate timezone support in Django
 
 # JWT settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2), 
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=365), 
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15), 
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=183), 
     'ROTATE_REFRESH_TOKENS': False,  # Refresh token is not rotated automatically
     'BLACKLIST_AFTER_ROTATION': False,
     'ALGORITHM': 'HS256',

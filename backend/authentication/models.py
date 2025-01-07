@@ -68,7 +68,6 @@ class User(AbstractBaseUser):
     def __str__(self):
         return self.email
 
-
 class PasswordResetToken(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     token = models.CharField(max_length=32, unique=True)
