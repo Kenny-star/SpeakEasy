@@ -17,11 +17,23 @@ import jwt
 
 duration = settings.EMAIL_TOKEN_CONFIRMATION_EXPIRY
 
+#EXAMPLE: To add objects from different model (will need to append info from player stats and resume in api)
+
+# class PasswordResetTokenSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = PasswordResetToken
+#         fields = ('token', 'created_at', 'expired_at')
+
 class UserSerializer(serializers.ModelSerializer):
+
+    # Include the related PasswordResetToken instances
+    # reset_tokens = PasswordResetTokenSerializer(source='passwordresettoken_set', many=True, read_only=True)
+
     class Meta:
         model = User
-        fields = ('id', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'is_superuser', 'date_joined')
-        # read_only_fields = ('is_active', 'is_staff', 'is_superuser', 'date_joined')
+        fields = ('id', 'email', 'first_name', 'last_name', 'date_joined')
+        # fields = ('id', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'is_superuser', 'date_joined', 'reset_tokens')
+        read_only_fields = ('is_active', 'is_staff', 'is_superuser', 'date_joined')
 
 class SignupSerializer(serializers.ModelSerializer):
     email = serializers.EmailField()

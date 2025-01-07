@@ -124,7 +124,6 @@ class LoginView(APIView):
 
         return response
     
-
 class RefreshTokenView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
@@ -143,7 +142,7 @@ class RefreshTokenView(APIView):
                 response = JsonResponse({"access_token": new_access_token['access_token']}, status=status.HTTP_200_OK)
 
                 # Set new access token in cookies
-                create_cookie(response, 'access_token', new_access_token, access_token_lifetime.total_seconds())
+                create_cookie(response, 'access_token', new_access_token['access_token'], access_token_lifetime.total_seconds())
 
                 return response
         except Exception as e:
@@ -154,11 +153,17 @@ class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        email = request.user.email
+        refresh_token = request.COOKIES.get('refresh_token')
         
+        if not refresh_token:
+            return JsonResponse({"error": "Refresh token not found"}, status=400)
         try:
-            user = User.objects.get(email=email)
-            serializer = UserSerializer(user)
+            refresh_token_obj = rt.objects.get(token=refresh_token)
+            
+            if refresh_token_obj.is_expired():
+                return JsonResponse({"error": "Refresh token expired"}, status=400)
+
+            serializer = UserSerializer(refresh_token_obj.user)
 
             return Response(serializer.data, status=status.HTTP_200_OK)
         
