@@ -2,10 +2,15 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=django,react
 
 ### Temporary ###
-backend
+# backend
 *.png
+
+### Configs ###
+*.cnf
+
 # Virtual environment folders
 venv/
+.env
 
 ### Django ###
 *.log
