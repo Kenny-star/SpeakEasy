@@ -13,6 +13,8 @@ from rest_framework import serializers
 from datetime import timedelta
 from authentication.models import User, PasswordResetToken, RefreshToken as rt
 from django_ratelimit.decorators import ratelimit
+from asgiref.sync import sync_to_async
+
 import jwt
 
 duration = settings.EMAIL_TOKEN_CONFIRMATION_EXPIRY

@@ -1,5 +1,5 @@
 from authentication.serializers import *
-from ._utils.helper import create_cookie
+from ._utils.helper import create_cookie, extract_access_token_from_header
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -66,9 +66,6 @@ class ForgotPasswordView(APIView):
         else:
             return Response(token_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-
-
 class PasswordResetView(APIView):
     permission_classes = [AllowAny]
     def post(self, request):
@@ -119,7 +116,7 @@ class LoginView(APIView):
         response = JsonResponse({'message': 'Login successful'})
 
         # Set JWT tokens in HTTP-only cookies
-        create_cookie(response, 'access_token', access_token, access_token_lifetime)
+        response['Authorization'] = f'Bearer {access_token}'
         create_cookie(response, 'refresh_token', refresh_token, refresh_token_lifetime)
 
         return response
@@ -142,7 +139,7 @@ class RefreshTokenView(APIView):
                 response = JsonResponse({"access_token": new_access_token['access_token']}, status=status.HTTP_200_OK)
 
                 # Set new access token in cookies
-                create_cookie(response, 'access_token', new_access_token['access_token'], access_token_lifetime.total_seconds())
+                response['Authorization'] = f'Bearer {new_access_token['access_token']}'
 
                 return response
         except Exception as e:
@@ -153,18 +150,14 @@ class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        refresh_token = request.COOKIES.get('refresh_token')
-        
-        if not refresh_token:
-            return JsonResponse({"error": "Refresh token not found"}, status=400)
+        access_token = extract_access_token_from_header(request)
+        payload = jwt.decode(access_token, settings.SECRET_KEY, algorithms=[settings.SIMPLE_JWT['ALGORITHM']])
+        user_id = payload.get('user_id')
+
         try:
-            refresh_token_obj = rt.objects.get(token=refresh_token)
+            user = User.objects.get(id=user_id)
             
-            if refresh_token_obj.is_expired():
-                return JsonResponse({"error": "Refresh token expired"}, status=400)
-
-            serializer = UserSerializer(refresh_token_obj.user)
-
+            serializer = UserSerializer(user)
             return Response(serializer.data, status=status.HTTP_200_OK)
         
         except User.DoesNotExist:
@@ -177,9 +170,7 @@ class LogoutView(APIView):
     def delete(self, request):
         try:
             refresh_token = request.COOKIES.get('refresh_token')
-            updated = User.objects.filter(
-                id=rt.objects.filter(token=refresh_token).values('user_id')
-            ).update(is_active=False)
+            rt.objects.deactivate_user_by_token(token=refresh_token)
 
             response = JsonResponse({'message': 'Logout successful'})
             response.set_cookie('access_token', '', max_age=0)

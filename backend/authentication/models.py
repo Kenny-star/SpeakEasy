@@ -5,23 +5,33 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth import get_user_model
+from ._utils.helper import extract_access_token_from_header
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.authentication import BaseAuthentication
 import jwt
 from datetime import datetime, timezone as tz
 import redis
 
+class RefreshTokenManager(models.Manager):
+    def deactivate_user_by_token(self, token):
+        try:
+            refresh_token = self.select_related('user').get(token=token)
+
+            refresh_token.user.is_active = False
+            refresh_token.user.save()
+
+            refresh_token.delete()
+
+        except self.model.DoesNotExist:
+
+            raise ValueError("Refresh token does not exist.")
+
 class AccessTokenAuthentication(BaseAuthentication):
     def authenticate(self, request):
-        # Get the access token from the cookies
-        access_token_str = request.COOKIES.get('access_token', None)
-
-        if not access_token_str:
-            raise AuthenticationFailed("No access token found. Please login.")
-        
+        token = extract_access_token_from_header(request)
         try:
             # Decode the JWT access token to get the payload
-            payload = jwt.decode(access_token_str, settings.SECRET_KEY, algorithms=[settings.SIMPLE_JWT['ALGORITHM']])
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.SIMPLE_JWT['ALGORITHM']])
 
             user_id = payload.get('user_id')
             if not user_id:
@@ -40,8 +50,13 @@ class AccessTokenAuthentication(BaseAuthentication):
                 user = get_user_model().objects.filter(id=user_id).first()
                 if not user:
                     raise AuthenticationFailed('User not found')
+                
+                user_data = {
+                    'id': user.id,
+                    # 'is_active': user.is_active,
+                }
                 # Cache the user object for subsequent requests
-                cache.set(redis_key, user, timeout=1800)  # Cache for 30 min
+                cache.set(redis_key, user_data, timeout=1800)  # Cache for 30 min
             
             return (user, None)
         
@@ -113,6 +128,7 @@ class RefreshToken(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expired_at = models.DateTimeField()
 
+    objects = RefreshTokenManager()
 
     def is_expired(self):
         return timezone.now() > self.expired_at
