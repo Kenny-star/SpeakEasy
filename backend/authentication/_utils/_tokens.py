@@ -10,5 +10,7 @@ def generate_verification_token(user, time):
             'user_id': user.id,
             'email': user.email,
             'exp': now() + time,  # Token expires in 1 day
+            "iat": now(),
+            "token_type": "access_token"
         }
         return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.SIMPLE_JWT['ALGORITHM'])
