@@ -6,8 +6,8 @@ package-lock.json
 yarn.lock
 
 # Build files
-frontend/speakeasy/dist/
-frontend/speakeasy/build/
+frontend/dist/
+frontend/build/
 
 # IDE specific
 .vscode/
