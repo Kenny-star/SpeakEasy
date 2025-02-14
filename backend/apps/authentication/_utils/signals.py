@@ -6,9 +6,9 @@ from django.contrib.auth.signals import user_logged_in
 from django.conf import settings
 from django.utils.timezone import now
 from datetime import timedelta
-from authentication.models import PasswordHistory
-from authentication._utils._tokens import generate_verification_token
-from authentication._utils.email import send_verification_email_async
+from apps.authentication.models import PasswordHistory
+from apps.authentication._utils._tokens import generate_verification_token
+from apps.authentication._utils.email import send_verification_email_async
 
 duration = settings.EMAIL_TOKEN_CONFIRMATION_EXPIRY
 

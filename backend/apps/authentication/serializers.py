@@ -12,7 +12,7 @@ from django.db import IntegrityError, transaction
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import serializers
 from datetime import timedelta
-from authentication.models import User, PasswordResetToken, RefreshToken as rt
+from apps.authentication.models import User, PasswordResetToken, RefreshToken as rt
 from django_ratelimit.decorators import ratelimit
 from asgiref.sync import sync_to_async
 

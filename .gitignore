@@ -19,6 +19,7 @@ frontend/build/
 # backend
 *.png
 backend/api/settings.py
+ideas
 ### Configs ###
 *.cnf
 

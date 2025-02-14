@@ -1,10 +1,10 @@
-from authentication.serializers import *
 from ._utils.helper import create_cookie, extract_access_token_from_header
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from authentication.models import *
-from authentication.models import RefreshToken as rt
+from apps.authentication.models import *
+from apps.authentication.serializers import *
+from apps.authentication.models import RefreshToken as rt
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from django.contrib.auth.hashers import check_password, make_password
 from django.conf import settings
