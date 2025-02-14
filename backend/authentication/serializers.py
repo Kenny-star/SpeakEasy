@@ -2,6 +2,7 @@ from ._utils.email import *
 from ._utils._tokens import generate_verification_token
 from ._utils.helper import authenticate_login
 from django.conf import settings
+from django.contrib.auth.hashers import make_password
 from django.utils.timezone import now
 from django.utils.crypto import get_random_string
 from django.utils import timezone
@@ -64,10 +65,17 @@ class SignupSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         
         validated_data.pop('password_confirm')  
+        # Hash the password before saving
+        password = validated_data.pop('password')
+        hashed_password = make_password(password)
+
         with transaction.atomic():
             user, created = User.objects.get_or_create(
-                email=validated_data['email'],  # Match by email
-                defaults=validated_data
+                email=validated_data['email'],
+                defaults={
+                    **validated_data,
+                    'password': hashed_password  # Save the hashed password
+                }
             )
         
         if not created:
@@ -89,7 +97,6 @@ class LoginSerializer(serializers.Serializer):
     def validate(self, data):
         email = data.get('email')
         password = data.get('password')
-
         # Validate credentials
         user = authenticate_login(email=email, password=password)
         if not user:
@@ -132,26 +139,25 @@ class RefreshTokenSerializer(serializers.Serializer):
     def validate(self, data):
         refresh_token = data.get('refresh_token')
         try:
-            # Check if the refresh token is expired in the DB
             refresh_token_instance = rt.objects.get(token=refresh_token)
             if refresh_token_instance.is_expired():
-                raise serializers.ValidationError("Refresh token is expired. Login is required")
+                raise serializers.ValidationError("Refresh token is expired")
 
+            try:
+                self.refresh = RefreshToken(refresh_token)
+            except Exception:
+                raise serializers.ValidationError("Invalid refresh token format")
+
+            return data
+
+        except rt.DoesNotExist:
+            raise serializers.ValidationError("Refresh token not found")
         except Exception as e:
-            raise serializers.ValidationError("Invalid or expired refresh token.")
-
-        return data
+            raise serializers.ValidationError(str(e))
 
     def create(self, validated_data):
-        # Use the refresh token to create a new access token
-        refresh_token = validated_data['refresh_token']
-        refresh = RefreshToken(refresh_token)
-
-        # Generate a new access token
-        access_token = str(refresh.access_token)
-
         return {
-            'access_token': access_token,
+            'access_token': str(self.refresh.access_token),
         }
       
 # Serializer to generate and verify password reset tokens
@@ -278,9 +284,7 @@ class EmailVerificationSerializer(serializers.Serializer):
     token = serializers.CharField()
 
     def validate_token(self, token):
-        try:
-            print(token)
-            # Decode the token to extract payload
+        try:            # Decode the token to extract payload
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.SIMPLE_JWT['ALGORITHM']])
             # Ensure the required fields exist in the payload
             user_id = payload.get('user_id')

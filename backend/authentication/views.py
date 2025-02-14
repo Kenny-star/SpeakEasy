@@ -19,7 +19,8 @@ access_token_lifetime = settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME']
 refresh_token_lifetime = settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']
 
 class SignupView(APIView):
-    permission_classes = [AllowAny]
+    authentication_classes = []
+    permission_classes = [AllowAny]  
     def post(self, request, *args, **kwargs):
         
         serializer = SignupSerializer(data=request.data)
@@ -121,6 +122,7 @@ class LoginView(APIView):
 
         return response
     
+# Auth type: Bearer Token, it takes from response header Bearer token and you add it manually in the bearer token of the next request.
 class RefreshTokenView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
@@ -173,7 +175,6 @@ class LogoutView(APIView):
             rt.objects.deactivate_user_by_token(token=refresh_token)
 
             response = JsonResponse({'message': 'Logout successful'})
-            response.set_cookie('access_token', '', max_age=0)
             response.set_cookie('refresh_token', '', max_age=0)
             
             return response

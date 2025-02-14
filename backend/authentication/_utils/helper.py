@@ -19,6 +19,7 @@ def authenticate_login(email=None, password=None):
         try:
             user = User.objects.get(email=email)
             if user.check_password(password):
+                print(user)
                 return user
         except User.DoesNotExist:
             return None
